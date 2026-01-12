@@ -76,14 +76,11 @@ TRACE_HANDLER_CLIENT: EventClient = default_trace_action
 
 class Signal:
     def __init__(
-        self, name: str, start_value: EventValue | int | float | str | None = None
+        self, name: str, start_value: EventValue | int | float | str = SIG_START_DEFAULT
     ):
         self.name = name
-        if start_value is None:
-            # Note: pragmatically, the default start state is 0 rather than 'undefined'
-            start_value = SIG_START_DEFAULT
         self.value: EventValue = EventValue(start_value)
-        self.previous_value: EventValue = SIG_UNDEFINED
+        self.previous_value = SIG_UNDEFINED
         self.connected_clients: list[SignalConnection] = []
         # This is a placeholder for the (unique) trace connection
         self._trace_connection: SignalConnection | None = None
@@ -92,9 +89,14 @@ class Signal:
         msg = f"Signal<{self.name} = {self.value!s}>"
         return msg
 
-    def update(self, time: EventTime, value: EventValue = SIG_ZERO) -> list[Event]:
-        self.previous_value = self.value
+    def update(
+        self,
+        time: EventTime | int | float,
+        value: EventValue | int | float | str = SIG_ZERO,
+    ) -> list[Event]:
+        time = EventTime(time)
         value = EventValue(value)
+        self.previous_value = self.value
         self.value = value
         further_events: list[Event] = []
         for connection in self.connected_clients:

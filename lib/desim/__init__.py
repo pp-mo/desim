@@ -1,6 +1,21 @@
 """
 Discrete Event Simulation.
 
+Proposed:
+    * a device output is a signal
+    * a device input is an EventClient -- but see below...
+    * an Event is a (time, value, call, context)
+        -- but the time can have (optional) priority, in addition to a float value
+    * an EventClient is Callable[[EventTime, EventValue, context], None]
+
+To trigger stuff, either Signal.update() or Device.<input>().
+A Signal.update()
+  performs connection calls, which may include Device.<input> calls,
+  so it *could* return new events.
+
+A Device.<input>() will likewise return List[Event]
+
+
 Basic classes:
 
 A Device is an object with :
