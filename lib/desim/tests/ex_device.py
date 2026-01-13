@@ -1,4 +1,3 @@
-from desim.event import EventTime, EventValue
 from desim.signal import SIG_UNDEFINED
 from desim.device import Device
 
@@ -10,7 +9,7 @@ class TrialDevice(Device):
         self.out1 = self.add_output("out1")
 
     @Device.input
-    def in1(self, time: EventTime, value: EventValue):  # type: ignore
+    def in1(self, time, value):
         if self.state == "idle":
             self.out1.update(time, SIG_UNDEFINED)
         self.state = "changing"
@@ -19,10 +18,10 @@ class TrialDevice(Device):
         self.act(self._time_change_complete, "new_output")
 
     @Device.action
-    def new_output(self, time: EventTime, value: EventValue, context=None):  # type: ignore
+    def new_output(self, time):
         assert self.state == "changing"
         if time.time >= self._time_change_complete:
-            self.out1.update(time, self._latest_value)  # type: ignore
+            self.out1.update(time, self._latest_value)
             self.state = "idle"
 
 

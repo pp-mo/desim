@@ -1,8 +1,13 @@
 from functools import wraps
+from typing import Any, Callable
 
 from desim import SIG_UNDEFINED
 from desim.event import Event, EventClient, EventTime, EventValue
-from desim.signal import SIG_START_DEFAULT, SIG_ZERO, Signal, SignalConnection
+from desim.signal import SIG_START_DEFAULT, Signal, SignalConnection
+
+InputAndActionCallsType = Callable[
+    ["Device", EventTime, EventValue | None, Any], list[Event] | None
+]
 
 
 class Device:
@@ -92,8 +97,8 @@ class Device:
         name: str,
         hookset: dict[str, list[SignalConnection]],
         time: EventTime,
-        value: EventValue,
-        context,
+        value: EventValue | None = None,
+        context=None,
     ):
         hooks = hookset.get(name, [])
         for hook in hooks:
@@ -172,13 +177,13 @@ class Device:
                             self.unhook(tracehook)
 
     @staticmethod
-    def _wrap_functype(inner_func, label: str) -> EventClient:
+    def _wrap_functype(inner_func, label: str) -> InputAndActionCallsType:
         """
         A basic decorator for wrapping input+action functions.
 
         Provides common behaviours, including "hooks" and labelling.
-        Expects signatures like input(time, value) and action(time).
-        Converts the wrapped function into a EventClient instance.
+        Expects signatures like input(time, value) and action(time[, value[, context]]).
+        Converts the wrapped function into an EventClient instance.
         """
         name = inner_func.__name__
 
@@ -229,15 +234,16 @@ class Device:
             return results
 
         setattr(wrapper_call, label, True)
-        return wrapper_call  # type: ignore
+        # TODO: typing this seems tricky.  Possibly needs more control over @wraps() ?
+        return wrapper_call
 
     @staticmethod
-    def action(inner_func) -> EventClient:
+    def action(inner_func) -> InputAndActionCallsType:
         """Decorator to make an action function."""
         return Device._wrap_functype(inner_func, "_label_action")
 
     @staticmethod
-    def input(inner_func) -> EventClient:
+    def input(inner_func) -> InputAndActionCallsType:
         """Decorator to make an input function."""
         return Device._wrap_functype(inner_func, "_label_input")
 
@@ -249,7 +255,7 @@ class Device:
         self,
         time: EventTime | float | int,
         action_name: str,
-        value: EventValue | float | int | str = SIG_ZERO,
+        value: EventValue | float | int | str | None = None,
         context=None,
     ):
         """
@@ -259,7 +265,8 @@ class Device:
         Usually, this will cause a state transition after a time delay.
         """
         time = EventTime(time)
-        value = EventValue(value)
+        if value is not None:
+            value = EventValue(value)
         action = self.actions.get(action_name)
         assert callable(action) and hasattr(action, "_label_action")
 
@@ -269,7 +276,7 @@ class Device:
             # Call the contained action with self as the instance.
             action(self, time, value, context)
 
-        event = Event(time, value, _nonmethod_call, context)
+        event = Event(time, _nonmethod_call, value, context)
         self._further_acts.append(event)
 
     @classmethod

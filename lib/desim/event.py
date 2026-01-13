@@ -98,17 +98,23 @@ EventClient = Callable[[EventTime, EventValue | None, Any], list["Event"] | None
 
 class Event:
     time: EventTime
-    value: EventValue
     call: EventClient
+    value: EventValue | None
     context: Any = None
 
     # TODO: a suitable constructor will be wanted.
     def __init__(
-        self, time: EventTime, value: EventValue, call: EventClient, context: Any = None
+        self,
+        time: EventTime,
+        call: EventClient,
+        value: EventValue | None = None,
+        context: Any = None,
     ):
         self.time = EventTime(time)
-        self.value = EventValue(value)
         self.call = call
+        if value is not None:
+            value = EventValue(value)
+        self.value = value
         self.context = context
 
     def action(self):
