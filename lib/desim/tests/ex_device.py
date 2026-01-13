@@ -7,12 +7,12 @@ class TrialDevice(Device):
     def __init__(self, name: str, delay: float = 1.5):
         super().__init__(name)
         self.delay = delay
-        self.add_output("out1")
+        self.out1 = self.add_output("out1")
 
     @Device.input
     def in1(self, time: EventTime, value: EventValue):  # type: ignore
         if self.state == "idle":
-            self.out1.update(time, SIG_UNDEFINED)  # type: ignore
+            self.out1.update(time, SIG_UNDEFINED)
         self.state = "changing"
         self._time_change_complete = time.time + self.delay
         self._latest_value = value

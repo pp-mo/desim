@@ -298,6 +298,13 @@ class Device:
         return self._list_labelled_funcs("_label_input")
 
     def add_output(self, name: str, start_value: EventValue = SIG_START_DEFAULT):
+        """Create an output signal.
+
+        Outputs are normally created in init, and assigned to the instance for ease of
+        use.
+        E.G. "self.out1 = self.add_output("out1")".
+        This routine also installs them in the "self.outputs" dict.
+        """
         output_signal = Signal(name=name, start_value=start_value)
         self.outputs[name] = output_signal
-        setattr(self, name, output_signal)
+        return output_signal
