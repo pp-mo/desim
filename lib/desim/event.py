@@ -102,7 +102,6 @@ class Event:
     value: EventValue | None
     context: Any = None
 
-    # TODO: a suitable constructor will be wanted.
     def __init__(
         self,
         time: EventTime,
@@ -118,5 +117,13 @@ class Event:
         self.context = context
 
     def action(self):
-        results = self.call(self.time, self.value, self.context)
+        # As for hook callbacks, we are working with a generalised call description,
+        # but the actual called function may not support all the potential args.
+        # So only pass the args which are positively defined (not None)
+        args = (self.time,)
+        if self.context is not None or self.value is not None:
+            args += (self.value,)
+        if self.context is not None:
+            args += (self.context,)
+        results = self.call(*args)
         return results

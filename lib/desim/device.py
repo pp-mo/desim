@@ -5,8 +5,12 @@ from desim import SIG_UNDEFINED
 from desim.event import Event, EventClient, EventTime, EventValue
 from desim.signal import SIG_START_DEFAULT, Signal, SignalConnection
 
-InputAndActionCallsType = Callable[
+InputAndActionClassCallsType = Callable[
     ["Device", EventTime, EventValue | None, Any], list[Event] | None
+]
+
+InputAndActionInstanceCallsType = Callable[
+    [EventTime, EventValue | None, Any], list[Event] | None
 ]
 
 
@@ -33,6 +37,9 @@ class Device:
 
     def reset(self):
         self.state = "idle"
+
+    # Device hooks + tracing.
+    # TODO: tracing should *not* be embedded in Device, but implemented via hooks.
 
     def hook(
         self, name: str, call: EventClient, context=None, call_after=False
@@ -65,15 +72,15 @@ class Device:
         return new_hook
 
     def unhook(self, name_or_hook: str | SignalConnection):
-        # Discard ALL hooks for the given name, or the specific one given.
+        # Discard ALL hooks for the named component, OR just the specific one given.
         match name_or_hook:
             case str():
                 # Search in all hook places : remove ALL under that name
                 name: str = name_or_hook
                 for hookset in (self._prehooks, self._posthooks, self._output_hooks):
                     hooklist = hookset.pop(name)
-                    if hookset is self._output_hooks:
-                        # Must also disconnect all the hooks from the signal
+                    if hooklist and hookset is self._output_hooks:
+                        # Must *also* disconnect all the hooks from the signal
                         output = self.outputs.get(name, None)
                         if output is not None:
                             for a_hook in hooklist:
@@ -177,7 +184,7 @@ class Device:
                             self.unhook(tracehook)
 
     @staticmethod
-    def _wrap_functype(inner_func, label: str) -> InputAndActionCallsType:
+    def _wrap_functype(inner_func, label: str) -> InputAndActionClassCallsType:
         """
         A basic decorator for wrapping input+action functions.
 
@@ -203,13 +210,11 @@ class Device:
                 case _:
                     msg = f"'value' {value!r} has unsupported type."
                     raise TypeError(msg)
-            args: tuple = (self,)
+            args: tuple = (time,)
             if context is not None:
-                args += (time, value, context)
+                args += (value, context)
             elif value is not None:
-                args += (time, value)
-            else:
-                args += (time,)
+                args += (value,)
             self.call_hooks(
                 name=name,
                 hookset=self._prehooks,
@@ -217,8 +222,7 @@ class Device:
                 value=value,
                 context=context,
             )
-            # NOTE: this means an action/input cannot directly call an action/input of the
-            inner_results = inner_func(*args)  # NB explicit self is needed here
+            inner_results = inner_func(self, *args)  # NB explicit self is needed here
             self.call_hooks(
                 name=name,
                 hookset=self._posthooks,
@@ -238,12 +242,12 @@ class Device:
         return wrapper_call
 
     @staticmethod
-    def action(inner_func) -> InputAndActionCallsType:
+    def action(inner_func) -> InputAndActionClassCallsType:
         """Decorator to make an action function."""
         return Device._wrap_functype(inner_func, "_label_action")
 
     @staticmethod
-    def input(inner_func) -> InputAndActionCallsType:
+    def input(inner_func) -> InputAndActionClassCallsType:
         """Decorator to make an input function."""
         return Device._wrap_functype(inner_func, "_label_input")
 
@@ -269,40 +273,40 @@ class Device:
             value = EventValue(value)
         action = self.actions.get(action_name)
         assert callable(action) and hasattr(action, "_label_action")
-
-        def _nonmethod_call(
-            time: EventTime, value: EventValue | None = None, context=None
-        ):
-            # Call the contained action with self as the instance.
-            action(self, time, value, context)
-
-        event = Event(time, _nonmethod_call, value, context)
+        event = Event(time, action, value, context)
         self._further_acts.append(event)
 
-    @classmethod
-    def _list_labelled_funcs(cls, label: str) -> dict[str, EventClient]:
+    def _map_labelled_funcs(
+        self, label: str
+    ) -> dict[str, InputAndActionInstanceCallsType]:
         """Return a dict of the device's inputs with a particular label.
 
         This enables us to identify inputs + actions.
         Doing it this way to avoid using a metaclass.
         """
+        cls = self.__class__
         all_attrs = {name: getattr(cls, name) for name in dir(cls)}
         wanted_calls = {
-            name: call
+            name: getattr(self, name)  # get the INSTANCE method
             for name, call in all_attrs.items()
             if callable(call) and hasattr(call, label)
         }
         return wanted_calls
 
-    @property
-    def actions(self):
-        """Return a dict of the device's actions."""
-        return self._list_labelled_funcs("_label_action")
+    # Properties listing all device inputs + actions.
+    # NOTE: calculated dynamically, instead of in the "@action" decorator, because we
+    # want *instance* methods, which are not available at class definition time.
+    # TODO: they could be cached, though ?
 
     @property
-    def inputs(self):
+    def actions(self) -> dict[str, InputAndActionInstanceCallsType]:
+        """Return a dict of the device's actions."""
+        return self._map_labelled_funcs("_label_action")
+
+    @property
+    def inputs(self) -> dict[str, InputAndActionInstanceCallsType]:
         """Return a dict of the device's inputs."""
-        return self._list_labelled_funcs("_label_input")
+        return self._map_labelled_funcs("_label_input")
 
     def add_output(self, name: str, start_value: EventValue = SIG_START_DEFAULT):
         """Create an output signal.
