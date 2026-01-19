@@ -56,7 +56,7 @@ class SignalConnection:
 
 
 # Pre-defined constant values
-SIG_UNDEFINED: EventValue = EventValue("<undefined-value>")
+SIG_UNDEFINED: EventValue = EventValue("<undef>")
 SIG_ZERO: EventValue = EventValue(0)
 SIG_START_DEFAULT: EventValue = SIG_ZERO
 
@@ -84,7 +84,9 @@ TRACE_HANDLER_CLIENT: EventClient = default_trace_action
 
 class Signal:
     def __init__(
-        self, name: str, start_value: EventValue | int | float | str = SIG_START_DEFAULT
+        self,
+        name: str,
+        start_value: EventValue | int | float | str = SIG_START_DEFAULT,
     ):
         self.name = name
         self.value: EventValue = EventValue(start_value)
@@ -101,6 +103,7 @@ class Signal:
         self,
         time: EventTime | int | float,
         value: EventValue | int | float | str = SIG_ZERO,
+        context=None,  # N.B. unused, only there so we can receive from events
     ) -> list[Event]:
         time = EventTime(time)
         value = EventValue(value)

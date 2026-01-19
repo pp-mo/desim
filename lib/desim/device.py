@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from functools import wraps
 from typing import Any, Callable
 
@@ -26,21 +27,29 @@ class Device:
         or returning a list of events.
     """
 
+    RESET_STATE = "idle"
+
     def __init__(self, name: str):
         self.name = name
-        self.state = "idle"  # This is conventional
         self._prehooks: dict[str, list[SignalConnection]] = {}
         self._posthooks: dict[str, list[SignalConnection]] = {}
         self._output_hooks: dict[str, list[SignalConnection]] = {}
         self.outputs: dict[str, Signal] = {}
         self._further_acts: list[Event] = []
+        self._current_time = None  # set during input/action callbacks
+        self.reset()
 
     def reset(self):
-        self.state = "idle"
+        """Reset the device to the initial state.
+
+        A conventional usage.
+        """
+        self.state = self.RESET_STATE
 
     # Device inputs, actions and outputs.
     # All are subclass-specific.
     # inputs + actions are methods, wrapped with common behaviours
+    #  - they are mostly the same, except actions normally don't take a value argument.
     # outputs are just Signals.
 
     @staticmethod
@@ -62,6 +71,10 @@ class Device:
             context=None,
         ):
             time = EventTime(time)
+            # Set a 'latest time' record: This enables update() to have a default time,
+            #  and means we can test if update/act are called from an input/action.
+            assert self._current_time is None
+            self._current_time = time
             match value:
                 case None:
                     value = None
@@ -75,24 +88,17 @@ class Device:
                 args += (value, context)
             elif value is not None:
                 args += (value,)
-            self.call_hooks(
-                name=name,
-                hookset=self._prehooks,
-                time=time,
-                value=value,
-                context=context,
-            )
-            inner_results = inner_func(self, *args)  # NB explicit self is needed here
-            self.call_hooks(
-                name=name,
-                hookset=self._posthooks,
-                time=time,
-                value=value,
-                context=context,
-            )
+            with self._run_with_hooks(name, time, value, context):
+                inner_results = inner_func(
+                    self, *args
+                )  # NB explicit self is needed here
             if inner_results:
                 self._further_acts += inner_results
-            # now **remove** any created events acts from the static list + return them.
+            # Unset the current time, to catch any spurious calls to act() or update(),
+            #  which are supposed to only be invoked from an input/action call.
+            self._current_time = None
+            # **Remove** newly added events from the current pending list + return them.
+            #  (these will normally have been created by act/update calls).
             results = self._further_acts
             self._further_acts = []
             return results
@@ -111,7 +117,7 @@ class Device:
         """Decorator to make an input function."""
         return Device._wrap_functype(inner_func, "_label_input")
 
-    # Properties with dicts of all the device inputs + actions.
+    # Properties providing name: method maps of all the device inputs + actions.
     # NOTE: these are calculated dynamically, instead of in the "@action/input"
     # decorators, because we want *instance* methods (so, not available at class
     # definition time).
@@ -147,11 +153,14 @@ class Device:
     def add_output(self, name: str, start_value: EventValue = SIG_START_DEFAULT):
         """Create an output signal.
 
-        Outputs are normally created in init, and assigned to the instance for ease of
-        use.  E.G. "self.out1 = self.add_output('out1')".
+        Outputs are normally created in init.  They are automatically assigned to the
+        'self.outputs' dict, and also as a named instance property.
 
-        This routine also installs them in the "self.outputs" dict, and as instance
-        properties.
+        Examples
+        --------
+        >>> self.add_output("out1", start_value=0)
+        >>> out = <device>.outputs["out1"]
+        >>> <device>.out1.update(2.0, 2)
         """
         output_signal = Signal(name=name, start_value=start_value)
         self.outputs[name] = output_signal
@@ -170,26 +179,72 @@ class Device:
         context=None,
     ):
         """
-        Schedule a subsequent call (at a later simulation time) to one of this device's
-        @action methods.
+        Schedule a subsequent action.
 
-        This creates a new Event and adds it to self._further_acts, from where it is
-        eventually returned to the caller of the device function (input or action), as
-        standard behaviour of action+input methods (from the common code wrapper).
+        This creates + schedules a future call (with a later simulation time) to one of
+        this device's @action methods.
+
+        This creates a new Event and records it, from where it is eventually returned to
+        the caller of the device function (input or action), as a standard behaviour of
+        action+input methods (from the common code wrapper).
+
+        Examples
+        --------
+        >>> self.act(t + 0.5, 'next')
+
+        Notes
+        -----
+        * The 'value' and 'context' args are usually redundant, but are included for
+          completeness.  If required, an action may be defined to take a value argument,
+          or value + context, but normally they are not -- in which case, passing either
+          value or context will cause an error.
+
+        * This method can only be called from within an action/input routine.  This is
+          checked + will error if not.
         """
+        # Check that we are called only from within an input/action routine.
+        assert self._current_time is not None
         time = EventTime(time)
         if value is not None:
             value = EventValue(value)
         action = self.actions.get(action_name)
         assert callable(action) and hasattr(action, "_label_action")
-        event = Event(time, action, value, context)
-        self._further_acts.append(event)
+        with self._run_with_hooks("act", time, value, context=action_name):
+            event = Event(time, action, value, context)
+            self._further_acts.append(event)
+
+    def update(
+        self,
+        output_name: str,
+        value: EventValue | float | int | str | None = None,
+    ):
+        """
+        Update an output.
+
+        There is no 'time' arg, as time is taken from the calling function
+        (i.e. an action or input).
+
+        Notes
+        -----
+        Can only be called from within an action/input routine.  This is checked + will
+        error if not.
+
+        Examples
+        --------
+        >>> self.update('out1', new_value)
+        """
+        # Check that we are called only from within an input/action routine.
+        assert self._current_time is not None
+        time = self._current_time
+        if value is not None:
+            value = EventValue(value)
+        with self._run_with_hooks("update", time, value, context=output_name):
+            self.outputs[output_name].update(time, value)
 
     # Device hooks + tracing.
     # TODO: tracing should *not* be embedded in the Device code,
     #  but implemented via hooks.
     #  The storage + handling will still need an instance variable, though.
-
     def hook(
         self, name: str, call: EventClient, context=None, call_after=False
     ) -> SignalConnection:
@@ -214,6 +269,15 @@ class Device:
         else:
             # Inputs and Actions are EventClient-type methods : hooks are created by
             #  just inserting connections into the pre- or post-hook lists.
+            # The "act" and "update" methods are also 'hookable'.
+            all_names = (
+                ["act", "update"] + list(self.inputs.keys()) + list(self.actions.keys())
+            )
+            if name not in all_names:
+                raise ValueError("Unrecognised hook name:")
+            if name in ["act", "update"]:
+                # Special cases : since no callback, only put these in pre-hooks
+                call_after = False
             hookset = self._posthooks if call_after else self._prehooks
             hooklist = hookset.setdefault(name, [])
             new_hook = SignalConnection(call, context)
@@ -248,18 +312,27 @@ class Device:
                                 if output is not None:
                                     output.disconnect(hook)
 
-    def call_hooks(
-        self,
-        name: str,
-        hookset: dict[str, list[SignalConnection]],
-        time: EventTime,
-        value: EventValue | None = None,
-        context=None,
+    @contextmanager
+    def _run_with_hooks(
+        self, name: str, time: EventTime, value: EventValue | None = None, context=None
     ):
-        hooks = hookset.get(name, [])
-        for hook in hooks:
-            hook_context = {"call_context": context, "hook_context": hook.call_context}
-            hook.call(time, value, hook_context)
+        """Implement 'hook' callbacks for a device operation.
+
+        Call pre/posthooks before/after a code block.
+        """
+
+        def call_hooks(hookset: dict[str, list[SignalConnection]]):
+            hooks = hookset.get(name, [])
+            for hook in hooks:
+                hook_context = {
+                    "call_context": context,
+                    "hook_context": hook.call_context,
+                }
+                hook.call(time, value, hook_context)
+
+        call_hooks(self._prehooks)
+        yield
+        call_hooks(self._posthooks)
 
     def _trace_callback(
         self, time: EventTime, value: EventValue | None = None, context=None
@@ -279,24 +352,33 @@ class Device:
         msg = (
             f"TRACE {device_type}({device_name}).{component_type}({component_name}) : "
         )
+        msg += f"@{time}"
         if component_type == "input":
-            msg += f"time={time}, value={val}"
+            msg += f", value <-- {val}"
         elif component_type == "action":
-            msg += f"time={time}, value={val}"
-            if call_context:
+            if value is not None or call_context is not None:
+                msg += f", value={value}"
+            if call_context is not None:
                 msg += f", context={call_context}"
         elif component_type == "output":
             sig = self.outputs[component_name]
-            msg += f"time={time}, value {sig.previous_value} --> {sig.value}"
+            msg += f" :: {sig.previous_value} --> {sig.value}"
+            # msg = desim.signal.TRACE_HANDLER_CLIENT(time, value, signal=call_context)
+        elif component_type == "act":
+            msg += f" ==> {call_context!r}"
+        elif component_type == "update":
+            msg += f" {call_context} <== {value}"
         print(msg)
 
-    def trace(self, name: str) -> SignalConnection:
+    def trace(self, name: str, after: bool = False) -> SignalConnection:
         if name in self.inputs:
             component_type = "input"
         elif name in self.actions:
             component_type = "action"
         elif name in self.outputs:
             component_type = "output"
+        elif name in ["act", "update"]:
+            component_type = name
         else:
             msg = (
                 f"Cannot trace unknown device component: {name!r}, "
@@ -309,7 +391,7 @@ class Device:
             "component_type": component_type,
             "component_name": name,
         }
-        hook = self.hook(name, self._trace_callback, context)
+        hook = self.hook(name, self._trace_callback, context, call_after=after)
         return hook
 
     def untrace(self, name_or_hook: str | SignalConnection):

@@ -84,8 +84,11 @@ class EventValue:
             case _:
                 raise TypeError(f"Argument 'value', {value!r} has unsupported type.")
 
+    def __repr__(self):
+        return f"EventValue({self.value})"
+
     def __str__(self):
-        return repr(self.value)
+        return str(self.value)
 
     def __eq__(self, other):
         if not isinstance(other, EventValue):
@@ -98,7 +101,7 @@ EventClient = Callable[[EventTime, EventValue | None, Any], list["Event"] | None
 
 class Event:
     time: EventTime
-    call: EventClient
+    callback: EventClient
     value: EventValue | None
     context: Any = None
 
@@ -110,11 +113,14 @@ class Event:
         context: Any = None,
     ):
         self.time = EventTime(time)
-        self.call = call
+        self.callback = call
         if value is not None:
             value = EventValue(value)
         self.value = value
         self.context = context
+
+    def __repr__(self):
+        return f"Event(time={self.time}, value={self.value}, call={self.callback!r})"
 
     def action(self):
         # As for hook callbacks, we are working with a generalised call description,
@@ -125,5 +131,5 @@ class Event:
             args += (self.value,)
         if self.context is not None:
             args += (self.context,)
-        results = self.call(*args)
+        results = self.callback(*args)
         return results
