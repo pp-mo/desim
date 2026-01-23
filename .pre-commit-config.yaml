@@ -85,7 +85,7 @@ repos:
 
 -   repo: https://github.com/astral-sh/ruff-pre-commit
     # This template does not keep up-to-date with versions, visit the repo to see the most recent release.
-    rev: "v0.14.11"
+    rev: "v0.14.14"
     hooks:
     -   id: ruff-check
         types: [file, python]
