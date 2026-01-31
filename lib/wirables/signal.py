@@ -31,11 +31,17 @@ The operation of this is configurable by changing the value of TRACE_HANDLER_CLI
 its default is the 'default_trace_action' function, which prints to the terminal.
 """
 
-from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from desim.event import EventTime, EventValue, EventClient, Event, TimeTypes, ValueTypes
+from wirables.event import (
+    EventTime,
+    EventValue,
+    EventClient,
+    Event,
+    TimeTypes,
+    ValueTypes,
+)
 
 
 @dataclass
@@ -61,13 +67,13 @@ SIG_ZERO: EventValue = EventValue(0)
 SIG_START_DEFAULT: EventValue = SIG_ZERO
 
 
-def default_trace_action(
-    time: EventTime, value: EventValue | None = None, signal: Signal | None = None
+def _default_signal_trace_action(
+    time: EventTime, value: EventValue | None = None, signal: "Signal | None" = None
 ):
     """The default trace operation = print signal update details to the terminal.
 
     N.B. although this conforms to the generic EventClient signature, in this case the
-    passed 'context' argument is **always the signal which this is a trace of**.
+    passed 'context' argument is always just **the signal which this is a trace of**.
     """
     match signal:
         case None:
@@ -79,7 +85,7 @@ def default_trace_action(
 
 
 # : A single common definition for what trace actions do.
-TRACE_HANDLER_CLIENT: EventClient = default_trace_action
+TRACE_HANDLER_CLIENT: EventClient = _default_signal_trace_action
 
 
 class Signal:
@@ -160,7 +166,7 @@ class Signal:
         """Start tracing this signal.
 
         Adds a standard logging client to show whenever the signal updates.
-        The operation performed can be configured via desim.signal.DEFAULT_TRACE_OP.
+        The operation performed can be configured via wirables.signal.DEFAULT_TRACE_OP.
         """
         trace = getattr(self, "_trace_connection", None)
         if trace is None:

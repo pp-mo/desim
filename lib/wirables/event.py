@@ -10,7 +10,6 @@ An Event describes a callback operation to be performed, at a given associated
 EventTime with an associated EventValue.
 """
 
-from __future__ import annotations
 from functools import total_ordering
 from typing import Any, Callable
 
@@ -112,7 +111,7 @@ class EventValue:
         return self.value == other.value
 
 
-EventClient = Callable[[EventTime, EventValue | None, Any], list["Event"] | None]
+type EventClient = Callable[[EventTime, EventValue | None, Any], list[Event] | None]
 
 
 class Event:

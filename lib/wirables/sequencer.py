@@ -1,7 +1,10 @@
 from distlib.compat import raw_input
 
-from desim.signal import TimeTypes
-from desim.event import Event, EventTime
+from wirables.signal import TimeTypes
+from wirables.event import Event, EventTime
+
+
+__all__ = ["Sequencer"]
 
 
 class Sequencer:

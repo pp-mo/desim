@@ -3,9 +3,19 @@ from functools import wraps
 import inspect
 from typing import Any, Callable
 
-from desim import SIG_UNDEFINED
-from desim.event import Event, EventClient, EventTime, EventValue, TimeTypes, ValueTypes
-from desim.signal import SIG_START_DEFAULT, Signal, SignalConnection
+from wirables import (
+    SIG_UNDEFINED,
+    SIG_START_DEFAULT,
+    Signal,
+    Event,
+    EventClient,
+    EventTime,
+    EventValue,
+    TimeTypes,
+    ValueTypes,
+)
+from wirables.signal import SignalConnection
+
 
 InputAndActionClassCallsType = Callable[
     ["Device", EventTime, EventValue | None, Any], list[Event] | None
@@ -14,6 +24,8 @@ InputAndActionClassCallsType = Callable[
 InputAndActionInstanceCallsType = Callable[
     [EventTime, EventValue | None, Any], list[Event] | None
 ]
+
+__all__ = ["Device"]
 
 
 class Device:
@@ -24,8 +36,10 @@ class Device:
     Device.outputs are Signals.
     Device.actions are EventClients which represent delayed internal activities,
         typically involving state transitions, and typically invoked by scheduled Events.
-    Both input and action methods can also schedule new events by calling Device.act(),
-        or returning a list of events.
+    Both input and action methods can also call :
+        * 'act' to schedule action callbacks (i.e. timer triggered behaviour)
+        * 'out' to change a device output
+        * 'xto' to change device state
     """
 
     STATES: list[str] = ["idle"]
@@ -465,7 +479,7 @@ class Device:
         elif component_type == "output":
             sig = self.outputs[component_name]
             msg += f" :: {sig.previous_value} --> {sig.value}"
-            # msg = desim.signal.TRACE_HANDLER_CLIENT(time, value, signal=call_context)
+            # msg = wirables.signal.TRACE_HANDLER_CLIENT(time, value, signal=call_context)
         elif component_type == "act":
             msg += f" ==> {call_context!r}"
         elif component_type == "out":

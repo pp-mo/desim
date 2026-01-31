@@ -1,6 +1,6 @@
-from desim.event import Event
-from desim.signal import SIG_UNDEFINED, Signal
-from desim.device import Device
+from wirables.event import Event
+from wirables.signal import SIG_UNDEFINED, Signal
+from wirables.device import Device
 
 
 class TrialDevice(Device):
@@ -54,7 +54,7 @@ def run():
     # dev.trace("update")
     # sig_out.trace()
 
-    from desim.sequencer import Sequencer
+    from wirables.sequencer import Sequencer
 
     seq = Sequencer()
     seq.add(events)

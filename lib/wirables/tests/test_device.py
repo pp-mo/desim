@@ -1,9 +1,9 @@
 import pytest
 
-from desim.event import Event
-from desim.signal import Signal, SIG_UNDEFINED
+from wirables.event import Event
+from wirables.signal import Signal, SIG_UNDEFINED
 
-from desim.device import Device
+from wirables.device import Device
 
 
 class TestInit:

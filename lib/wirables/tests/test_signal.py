@@ -1,7 +1,7 @@
 import pytest
 
-from desim import signal
-from desim.signal import Signal, SIG_START_DEFAULT, SIG_UNDEFINED
+from wirables import signal
+from wirables.signal import Signal, SIG_START_DEFAULT, SIG_UNDEFINED
 
 
 @pytest.fixture(autouse=True)

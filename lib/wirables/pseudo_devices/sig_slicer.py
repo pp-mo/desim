@@ -1,7 +1,7 @@
 from typing import Literal
 
-from desim.device import Device
-from desim.event import EventTime, EventValue
+from wirables.device import Device
+from wirables.event import EventTime, EventValue
 
 
 class SigSlicer(Device):
