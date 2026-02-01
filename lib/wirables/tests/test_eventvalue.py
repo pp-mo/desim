@@ -1,6 +1,6 @@
 import pytest
 
-from desim.event import EventValue
+from wirables import EventValue
 
 
 class TestCreate:

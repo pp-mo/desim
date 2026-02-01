@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 
 # setuptools-scm version control
-# lib/desim/_version.py
+# lib/wirables/_version.py
 
 # Packages
 .Python

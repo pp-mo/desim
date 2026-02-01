@@ -1,6 +1,4 @@
-from desim.event import Event
-from desim.signal import SIG_UNDEFINED, Signal
-from desim.device import Device
+from wirables import Device, Event, SIG_UNDEFINED, Signal, Sequencer
 
 
 class TrialDevice(Device):
@@ -54,13 +52,11 @@ def run():
     # dev.trace("update")
     # sig_out.trace()
 
-    from desim.sequencer import Sequencer
-
     seq = Sequencer()
     seq.add(events)
     seq.verbose = True
-    seq.run()
-    # seq.interact()
+    # seq.run()
+    seq.interact()
 
     # # A different way of providing a second input action : direct Event construction
     # # NB **also** calls via the signal interface, instead of the device input
